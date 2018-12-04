@@ -90,12 +90,12 @@ def parse_args():
     "Parse arguments"
     parser = argparse.ArgumentParser(
         description='Download and build arXiv papers.')
-    parser.add_argument('tag', help='Paper tag')
+    parser.add_argument('tag', help='paper tag')
     parser.add_argument(
-        '--compiler', default='pdflatex', help='Use pdflatex or xelatex')
+        '--compiler', default='pdflatex', help='use pdflatex or xelatex')
     parser.add_argument(
-        '--forcedownload', default=False, help='Force download')
-    parser.add_argument('--skipextract', default=False, help='Skip extraction')
+        '--forcedownload', default=False, help='force download')
+    parser.add_argument('--skipextract', default=False, help='skip extraction')
 
     return parser.parse_args()
 
