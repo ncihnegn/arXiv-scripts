@@ -28,11 +28,15 @@ def filetype(file):
     raise Exception('Unknown file type', file)
 
 
-def dvi2pdf(dvi):
+def dvi2pdf(dvi, verbose):
     "Convert DVI to PDF"
-    subprocess.run(['dvips', dvi])
+    command = ['dvips', dvi]
+    if verbose:
+        print(command)
+    subprocess.run(command, capture_output=not verbose)
     ps = dvi.replace('.dvi', '.ps')
-    subprocess.run(['ps2pdf', ps])
+    print('ps2pdf')
+    subprocess.run(['ps2pdf', ps], capture_output=not verbose)
     #subprocess.run(['dvipdfmx', dvi])
     return dvi.replace('.dvi', '.pdf')
 
@@ -51,28 +55,41 @@ def extract(archive):
         subprocess.run(['gzip', '-dNf', archive])
 
 
-def tex2pdf(tex, compiler):
+def tex2pdf(tex, compiler, verbose):
     "Build PDF"
-    subprocess.run(['texliveonfly', '-c', compiler, tex])
+    command = ['texliveonfly', '-c', compiler]
+    if verbose:
+        print(command + [tex])
+    subprocess.run(command + [tex], capture_output=not verbose)
     command = [compiler, '-halt-on-error', '-shell-escape']
-    subprocess.run(command + [tex])
+    #if verbose:
+    #    print(command + [tex])
+    #subprocess.run(command + [tex], capture_output=not verbose)
     log = Path(tex.replace('.tex', '.log'))
     text = log.read_text(errors='ignore')
     if 'Package inputenc Error:' in text or 'UseRawInputEncoding' in text:
+        if verbose:
+            print('inputenc error')
         command.append('\\UseRawInputEncoding \\input')
-    if 'Non-PDF special' in text or 'extension: .pstex' in text or 'PSTricks' in text:
+    if 'extension: .pstex' in text or 'PSTricks' in text:
+        if verbose:
+            print('Switch to PostScript')
         compiler = compiler.replace('pdf', '')
         compiler = compiler.replace('xe', '')
         command[0] = compiler
-    subprocess.run(command + [tex])
+    if verbose:
+        print(command + [tex])
+    subprocess.run(command + [tex], capture_output=not verbose)
     while 'Rerun to' in log.read_text(errors='ignore'):
-        subprocess.run(command + [tex])
+        if verbose:
+            print('Rerun', command)
+        subprocess.run(command + [tex], capture_output=not verbose)
     missfont = Path('missfont.log')
     if missfont.exists():
         print('Missing fonts!')
     if not (compiler.startswith('pdf') or compiler.startswith('xe')):
         dvi = tex.replace('.tex', '.dvi')
-        return dvi2pdf(dvi)
+        return dvi2pdf(dvi, verbose)
     return tex.replace('.tex', '.pdf')
 
 
@@ -94,8 +111,9 @@ def parse_args():
     parser.add_argument(
         '--compiler', default='pdflatex', help='use pdflatex or xelatex')
     parser.add_argument(
-        '--forcedownload', default=False, help='force download')
-    parser.add_argument('--skipextract', default=False, help='skip extraction')
+        '-f', '--forcedownload', action='store_true', help='force download')
+    parser.add_argument('-s', '--skipextract', action='store_true', help='skip extraction')
+    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
 
     return parser.parse_args()
 
@@ -156,10 +174,14 @@ def main():
     compiler = args.compiler
     skipextract = args.skipextract
     forcedownload = args.forcedownload
+    verbose = args.verbose
+    print("arxiv:", tag, compiler, skipextract, forcedownload, verbose)
 
     source = 'latex'
     if not compiler.endswith('latex'):
         source = 'tex'
+        #if verbose:
+        print("Source: TeX")
 
     os.makedirs(tag, exist_ok=True)
     os.chdir(tag)
@@ -170,12 +192,16 @@ def main():
     if not os.path.exists(archive) or forcedownload:
         if download(tag, archive) == 'dvi':
             source = 'dvi'
+            if verbose:
+                print("Source: DVI")
 
     pdf = archive + '.pdf'
     file_type = filetype(archive)
     if file_type == 'pdf':
         os.rename(archive, pdf)
         source = 'pdf'
+        if verbose:
+            print("Source: PDF")
 
     # Extract
     if not skipextract and (source.endswith('tex') or source.endswith('dvi')):
@@ -187,7 +213,7 @@ def main():
         if results == []:
             raise Exception("Can't find a DVI file in", glob.glob('*'))
         dvi = results[0]
-        pdf = dvi2pdf(dvi)
+        pdf = dvi2pdf(dvi, verbose)
 
     if source.endswith('tex'):
         if source == 'latex':
@@ -207,7 +233,7 @@ def main():
         main_tex = results[0]
 
         # Build
-        pdf = tex2pdf(main_tex, compiler)
+        pdf = tex2pdf(main_tex, compiler, verbose)
 
     view_pdf(pdf)
 
