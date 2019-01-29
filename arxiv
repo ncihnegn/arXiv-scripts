@@ -60,7 +60,9 @@ def tex2pdf(tex, compiler, verbose):
     if verbose:
         print(command + [tex])
     subprocess.run(command + [tex], capture_output=not verbose)
-    command = [compiler, '-halt-on-error', '-shell-escape']
+    command = [
+        compiler, '-interaction=batchmode', '-halt-on-error', '-shell-escape'
+    ]
     #if verbose:
     #    print(command + [tex])
     #subprocess.run(command + [tex], capture_output=not verbose)
@@ -111,8 +113,10 @@ def parse_args():
         '--compiler', default='pdflatex', help='use pdflatex or xelatex')
     parser.add_argument(
         '-f', '--forcedownload', action='store_true', help='force download')
-    parser.add_argument('-s', '--skipextract', action='store_true', help='skip extraction')
-    parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument(
+        '-s', '--skipextract', action='store_true', help='skip extraction')
+    parser.add_argument(
+        '-v', '--verbose', action='store_true', help='verbose output')
 
     return parser.parse_args()
 
