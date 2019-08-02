@@ -109,14 +109,21 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Download and build arXiv papers.')
     parser.add_argument('tag', help='paper tag')
-    parser.add_argument(
-        '--compiler', default='pdflatex', help='use pdflatex or xelatex')
-    parser.add_argument(
-        '-f', '--forcedownload', action='store_true', help='force download')
-    parser.add_argument(
-        '-s', '--skipextract', action='store_true', help='skip extraction')
-    parser.add_argument(
-        '-v', '--verbose', action='store_true', help='verbose output')
+    parser.add_argument('--compiler',
+                        default='pdflatex',
+                        help='use pdflatex or xelatex')
+    parser.add_argument('-f',
+                        '--forcedownload',
+                        action='store_true',
+                        help='force download')
+    parser.add_argument('-s',
+                        '--skipextract',
+                        action='store_true',
+                        help='skip extraction')
+    parser.add_argument('-v',
+                        '--verbose',
+                        action='store_true',
+                        help='verbose output')
 
     return parser.parse_args()
 
@@ -180,7 +187,8 @@ def main():
     skipextract = args.skipextract
     forcedownload = args.forcedownload
     verbose = args.verbose
-    print("arxiv:", tag, compiler, skipextract, forcedownload, verbose)
+    print("arxiv:", tag, compiler, "skipextract:", skipextract,
+          "forcedownload:", forcedownload, "verbose:", verbose)
 
     source = 'latex'
     if not compiler.endswith('latex'):
