@@ -88,6 +88,7 @@ def tex2pdf(tex, compiler, verbose):
     missfont = Path('missfont.log')
     if missfont.exists():
         print('Missing fonts!')
+        subprocess.run(['cat', 'missfont.log'])
     if not (compiler.startswith('pdf') or compiler.startswith('xe')):
         dvi = tex.replace('.tex', '.dvi')
         return dvi2pdf(dvi, verbose)
