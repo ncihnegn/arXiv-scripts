@@ -59,7 +59,7 @@ def tex2pdf(tex, compiler, verbose):
     command = ['texliveonfly', '-c', compiler]
     if verbose:
         print(command + [tex])
-    subprocess.run(command + [tex], capture_output=not verbose)
+    subprocess.run(command + [tex], capture_output=not verbose, check=False)
     command = [
         compiler, '-interaction=batchmode', '-halt-on-error', '-shell-escape'
     ]
@@ -178,6 +178,8 @@ def find_main_latex():
     for file in glob.glob('*.tex'):
         text = Path(file).read_text(errors='ignore')
         if re.search('^\\s*\\\\documentclass', text, re.MULTILINE):
+            results.append(file)
+        if re.search('^\\s*\\\\documentstyle', text, re.MULTILINE):
             results.append(file)
     return results
 
