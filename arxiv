@@ -52,7 +52,7 @@ def tex2pdf(tex, compiler):
     subprocess.run(command + [tex])
     log = Path(tex.replace('.tex', '.log'))
     text = log.read_text(errors='ignore')
-    if 'Package inputenc Error: Invalid UTF-8 byte sequence' in text:
+    if 'Package inputenc Error: Invalid UTF-8 byte' in text:
         command.append('\\UseRawInputEncoding \\input')
     if 'Non-PDF special' in text or 'extension: .pstex' in text or 'PSTricks' in text:
         compiler = compiler.replace('pdf', '')
