@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+from scriptine import run, path
+from scriptine.shell import call
+import tarfile
+
+def download_command(tag):
+    url = 'http://arxiv.org/e-print/' + tag
+    file = tag + '.tar.gz'
+    call(['curl', '-o', file, url])
+
+def extract_command(tag):
+    dir = path(tag)
+    if not dir.exists():
+        dir.makedirs()
+    gz = tag + '.tar.gz'
+    call(['gunzip', '-f', gz])
+    tar = tag + '.tar'
+    if tarfile.is_tarfile(tar):
+        call(['tar', 'xf', tar, '-C', tag])
+    else:
+        call(['mv', tar, tag + '/' + tag + '.tex'])
+
+def compile_command(tag):
+    dir = path(tag)
+    with dir.as_working_dir():
+        for f in path.cwd().files('*.tex'):
+            if 'documentclass' in path(f).text():
+                call(['texliveonfly', f])
+                call(['pdflatex', '-shell-escape', f])
+                call(['pdflatex', '-shell-escape', f])
+                call(['pdflatex', '-shell-escape', f])
+
+def view_command(tag):
+    dir = path(tag)
+    with dir.as_working_dir():
+        for f in path.cwd().files('*.tex'):
+            if 'documentclass' in path(f).text():
+                pdf = f.replace('.tex', '.pdf')
+                call(['open', pdf])
+
+def batch_command(tag):
+    download_command(tag)
+    extract_command(tag)
+    compile_command(tag)
+    view_command(tag)
+
+if __name__ == '__main__':
+    run()
