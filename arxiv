@@ -13,6 +13,7 @@ import filetype
 from scriptine import path, run
 from scriptine.shell import call
 
+file = ""
 
 def download_command(tag):
     """Download"""
@@ -42,17 +43,22 @@ def find_main(tag):
     results = []
     directory = path(tag)
     with directory.as_working_dir():
-        for file in path.cwd().files('*.tex'):
-            if re.search('^\\s*\\\\documentclass', path(file).text(), re.MULTILINE):
-                results.append(file)
+        for texfile in path.cwd().files('*.tex'):
+            if re.search('^\\s*\\\\documentclass', path(texfile).text(), re.MULTILINE):
+                results.append(texfile)
     if results == []:
         raise Exception("Can't find the main tex file in " + tag)
     return choice(results)
 
-def compile_command(tag, file):
+def compile_command(tag):
     """Run LaTeX"""
+    global file
+
     directory = path(tag)
     missfont = 'missfont.log'
+
+    if file == "":
+        file = find_main(tag)
     with directory.as_working_dir():
         call(['texliveonfly', file])
         if path(missfont).isfile():
@@ -65,10 +71,13 @@ def compile_command(tag, file):
             with open(missfont, 'r') as fin:
                 print(fin.read())
 
-def view_command(tag, file):
+def view_command(tag):
     """Open the main PDF file"""
+    global file
     directory = path(tag)
     pdf = tag + '.pdf'
+    if file == "":
+        file = find_main(tag)
     with directory.as_working_dir():
         pdf = file.replace('.tex', '.pdf')
     view(pdf)
@@ -84,21 +93,23 @@ def view(pdf):
 
 def batch_command(tag):
     """Batch"""
+    global file
     if not path(tag + '.pdf').isfile():
         # if not (path(tag).isdir() or path(tag + '.tar').isfile() or path(tag + '.pdf').isfile()):
         download_command(tag)
         # if not path(tag).isdir():
         extract_command(tag)
         file = find_main(tag)
-        compile_command(tag, file)
-    view_command(tag, file)
+        compile_command(tag)
+    view_command(tag)
 
 def all_command():
     """Compile all subdirectories"""
+    global file
     for folder in os.listdir('.'):
         if path(folder).isdir() and folder[0].isdigit():
             file = find_main(folder)
-            compile_command(folder, file)
+            compile_command(folder)
 
 if __name__ == '__main__':
     run()
