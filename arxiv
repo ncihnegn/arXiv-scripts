@@ -15,11 +15,13 @@ from scriptine.shell import call
 
 file = ""
 
+
 def download_command(tag):
     """Download"""
     url = 'https://arxiv.org/e-print/' + tag
     file = tag + '.tar.gz'
     call(['curl', '-o', file, url])
+
 
 def extract_command(tag):
     """Extract"""
@@ -38,17 +40,20 @@ def extract_command(tag):
     elif path(tar).isfile():
         os.rename(tar, tag + '/' + directory.basename() + '.tex')
 
+
 def find_main(tag):
     """Find the main tex file"""
     results = []
     directory = path(tag)
     with directory.as_working_dir():
         for texfile in path.cwd().files('*.tex'):
-            if re.search('^\\s*\\\\documentclass', path(texfile).text(), re.MULTILINE):
+            if re.search('^\\s*\\\\documentclass', path(texfile).text(),
+                         re.MULTILINE):
                 results.append(texfile)
     if results == []:
         raise Exception("Can't find the main tex file in " + tag)
     return choice(results)
+
 
 def compile_command(tag):
     """Run LaTeX"""
@@ -71,16 +76,19 @@ def compile_command(tag):
             with open(missfont, 'r') as fin:
                 print(fin.read())
 
+
 def view_command(tag):
     """Open the main PDF file"""
     global file
     directory = path(tag)
     pdf = tag + '.pdf'
-    if file == "":
-        file = find_main(tag)
-    with directory.as_working_dir():
-        pdf = file.replace('.tex', '.pdf')
+    if not path(pdf).isfile():
+        if file == "":
+            file = find_main(tag)
+        with directory.as_working_dir():
+            pdf = file.replace('.tex', '.pdf')
     view(pdf)
+
 
 def view(pdf):
     """Open PDF file"""
@@ -91,17 +99,19 @@ def view(pdf):
     if platform.system() == 'Linux':
         Popen(['zathura', pdf])
 
+
 def batch_command(tag):
     """Batch"""
     global file
     if not path(tag + '.pdf').isfile():
-        # if not (path(tag).isdir() or path(tag + '.tar').isfile() or path(tag + '.pdf').isfile()):
         download_command(tag)
         # if not path(tag).isdir():
         extract_command(tag)
-        file = find_main(tag)
-        compile_command(tag)
+        if not path(tag + '.pdf').isfile():
+            file = find_main(tag)
+            compile_command(tag)
     view_command(tag)
+
 
 def all_command():
     """Compile all subdirectories"""
@@ -110,6 +120,7 @@ def all_command():
         if path(folder).isdir() and folder[0].isdigit():
             file = find_main(folder)
             compile_command(folder)
+
 
 if __name__ == '__main__':
     run()
