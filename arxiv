@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import filetype
 import glob
 import gzip
 import os
