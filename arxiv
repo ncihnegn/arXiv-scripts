@@ -20,7 +20,7 @@ def extract_command(tag):
     if tarfile.is_tarfile(tar):
         call(['tar', 'xf', tar, '-C', tag])
     else:
-        call(['mv', tar, tag + '/' + tag + '.tex'])
+        call(['mv', tar, tag + '/' + dir.basename() + '.tex'])
 
 def compile_command(tag):
     dir = path(tag)
