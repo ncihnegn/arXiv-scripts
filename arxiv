@@ -7,7 +7,7 @@ from scriptine.shell import call
 from subprocess import Popen
 
 def download_command(tag):
-    url = 'http://arxiv.org/e-print/' + tag
+    url = 'https://arxiv.org/e-print/' + tag
     file = tag + '.tar.gz'
     call(['curl', '-o', file, url])
 
