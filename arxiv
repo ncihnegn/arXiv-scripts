@@ -11,6 +11,8 @@ import tarfile
 import urllib.error
 import urllib.request
 from pathlib import Path
+import requests
+from lxml import etree
 
 
 def filetype(file):
@@ -97,11 +99,25 @@ def download(tag, archive):
     except urllib.error.HTTPError as e:
         print(e, url)
         if e.code == 403:
-            print('Try downloading DVI')
+            print('Try other formats')
             try:
-                url = 'https://arxiv.org/dvi/' + tag
-                urllib.request.urlretrieve(url, archive)
-                return 'dvi'
+                r = requests.get('https://arxiv.org/format/' + tag)
+                html = etree.HTML(bytes(bytearray(r.text, encoding='utf-8')))
+                forms = html.xpath('body/div/dl/dd/form')
+                paths = list(map(lambda f: f.get('action'), forms))
+                formats = dict()
+                for path in paths:
+                    format = path.split('/')[1]
+                    formats[format] = path
+                if 'dvi' in formats:
+                    urllib.request.urlretrieve('https://arxiv.org' + formats['dvi'], archive)
+                    return 'dvi'
+                if 'ps' in formats:
+                    urllib.request.urlretrieve('https://arxiv.org' + formats['ps'], archive)
+                    return 'ps'
+                if 'pdf' in formats:
+                    urllib.request.urlretrieve('https://arxiv.org' + formats['pdf'], archive)
+                    return 'pdf'
             except urllib.error.URLError as e:
                 print(e, url)
                 exit(-1)
