@@ -1,7 +1,11 @@
 #!/usr/bin/env python
+"""script to download from arXiv and build PDF"""
+
+import os
 import platform
 import re
 import tarfile
+from random import choice
 from subprocess import Popen
 
 import filetype
@@ -11,45 +15,66 @@ from scriptine.shell import call
 
 
 def download_command(tag):
+    """Download"""
     url = 'https://arxiv.org/e-print/' + tag
     file = tag + '.tar.gz'
     call(['curl', '-o', file, url])
 
 def extract_command(tag):
-    dir = path(tag)
-    dir.ensure_dir()
-    gz = tag + '.tar.gz'
-    kind = filetype.guess(gz)
-    if kind is None:
-        return
+    """Extract"""
+    gzip = tag + '.tar.gz'
+    kind = filetype.guess(gzip)
     if kind.extension == 'pdf':
-        call(['mv', gz, tag + '.' + kind.extension])
+        os.rename(gzip, tag + '.' + kind.extension)
         return
-    call(['gzip', '-df', gz])
+    if path(gzip).isfile():
+        call(['gzip', '-df', gzip])
+    directory = path(tag)
+    directory.ensure_dir()
     tar = tag + '.tar'
     if tarfile.is_tarfile(tar):
         call(['tar', 'xf', tar, '-C', tag])
-    else:
-        call(['mv', tar, tag + '/' + dir.basename() + '.tex'])
+    elif path(tar).isfile():
+        os.rename(tar, tag + '/' + directory.basename() + '.tex')
 
-def compile_command(tag):
-    dir = path(tag)
-    with dir.as_working_dir():
-        for f in path.cwd().files('*.tex'):
-            if re.search('^\s*\\\\documentclass', path(f).text(), re.MULTILINE):
-                call(['texliveonfly', f])
-                call(['pdflatex', '-shell-escape', f])
-                log = f.replace('.tex', '.log')
-                while 'Rerun to' in path(log).text():
-                    call(['pdflatex', '-shell-escape', f])
+def find_main(tag):
+    """Find the main tex file"""
+    results = []
+    directory = path(tag)
+    with directory.as_working_dir():
+        for file in path.cwd().files('*.tex'):
+            if re.search('^\\s*\\\\documentclass', path(file).text(), re.MULTILINE):
+                results.append(file)
+    if results == []:
+        raise Exception("Can't find the main tex file in " + tag)
+    return choice(results)
 
-def view_command(tag):
-    dir = path(tag)
+def compile_command(tag, file):
+    """Run LaTeX"""
+    directory = path(tag)
+    missfont = 'missfont.log'
+    with directory.as_working_dir():
+        call(['texliveonfly', file])
+        if path(missfont).isfile():
+            os.remove(missfont)
+        call(['pdflatex', '-shell-escape', file])
+        log = file.replace('.tex', '.log')
+        while 'Rerun to' in path(log).text():
+            call(['pdflatex', '-shell-escape', file])
+        if path(missfont).isfile():
+            with open(missfont, 'r') as fin:
+                print(fin.read())
+
+def view_command(tag, file):
+    """Open the main PDF file"""
+    directory = path(tag)
     pdf = tag + '.pdf'
-    with dir.as_working_dir():
-        for f in path.cwd().files('*.tex'):
-            if 'documentclass' in path(f).text():
-                pdf = f.replace('.tex', '.pdf')
+    with directory.as_working_dir():
+        pdf = file.replace('.tex', '.pdf')
+    view(pdf)
+
+def view(pdf):
+    """Open PDF file"""
     if platform.system() == 'Darwin':
         call(['open', pdf])
     if platform.system() == 'Windows':
@@ -58,10 +83,22 @@ def view_command(tag):
         Popen(['zathura', pdf])
 
 def batch_command(tag):
-    download_command(tag)
-    extract_command(tag)
-    compile_command(tag)
-    view_command(tag)
+    """Batch"""
+    if not path(tag + '.pdf').isfile():
+        # if not (path(tag).isdir() or path(tag + '.tar').isfile() or path(tag + '.pdf').isfile()):
+        download_command(tag)
+        # if not path(tag).isdir():
+        extract_command(tag)
+        file = find_main(tag)
+        compile_command(tag, file)
+    view_command(tag, file)
+
+def all_command():
+    """Compile all subdirectories"""
+    for folder in os.listdir('.'):
+        if path(folder).isdir() and folder[0].isdigit():
+            file = find_main(folder)
+            compile_command(folder, file)
 
 if __name__ == '__main__':
     run()
