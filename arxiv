@@ -13,6 +13,18 @@ import tarfile
 import urllib.error
 import urllib.request
 
+def filetype(file):
+    header = Path(file).read_bytes()[0:4]
+    if header == b'%PDF':
+        return 'pdf'
+    if header[0:-1] == b'%PS':
+        return 'ps'
+    if header[0:-1] == b'%PS':
+        return 'ps'
+    if header[0:2] == b'\x1f\x8b':
+        return 'gz'
+    raise Exception('Unknown file type', file)
+
 def main():
     parser = argparse.ArgumentParser(description='Download and build arXiv papers.')
     parser.add_argument('tag', help='Paper tag')
@@ -27,9 +39,9 @@ def main():
     forcedownload = args.forcedownload
 
     if compiler.endswith('latex'):
-        source = "latex"
+        source = 'latex'
     else:
-        source = "plain"
+        source = 'tex'
 
     os.makedirs(tag, exist_ok=True)
     os.chdir(tag)
@@ -44,19 +56,20 @@ def main():
             print(e, url)
             exit(-1)
 
-    # Extract
     pdf = archive + '.pdf'
-    if not skipextract:
-        file_type = filetype.guess(archive)
-        if file_type.extension == 'pdf':
-            os.rename(archive, pdf)
-            source = 'pdf'
-        if file_type.extension == 'ps':
-            ps = archive + '.ps'
-            os.rename(archive, ps)
-            subprocess.run(['ps2pdf', ps])
-            source = 'ps'
-        if file_type.extension == 'gz':
+    file_type = filetype(archive)
+    if file_type == 'pdf':
+        os.rename(archive, pdf)
+        source = 'pdf'
+    if file_type == 'ps':
+        ps = archive + '.ps'
+        os.rename(archive, ps)
+        subprocess.run(['ps2pdf', ps])
+        source = 'ps'
+
+    # Extract
+    if not skipextract and source.endswith('tex'):
+        if file_type == 'gz':
             if tarfile.is_tarfile(archive):
                 tar = tarfile.open(archive)
                 tar.extractall()
@@ -65,32 +78,36 @@ def main():
                 subprocess.run(['gunzip', '-N', archive])
 
         results = []
-        if source == "latex":
+        if source == 'latex':
             # Find the main file
-            for file in glob.glob("*.tex"):
+            for file in glob.glob('*.tex'):
                 if re.search('^\\s*\\\\documentclass', Path(file).read_text(errors='ignore'), re.MULTILINE):
                     results.append(file)
             if results == []:
-                raise Exception("Can't find the main TeX file", glob.glob("*.tex"))
-        else:
-            results = glob.glob("*.tex")
+                source = 'tex'
+                compiler = 'pdftex'
+        if source == 'tex':
+            results = glob.glob('*.tex')
+
+        if results == []:
+            raise Exception("Can't find the main TeX file", glob.glob('*.tex'))
 
         main = results[0]
 
         # Build
-        subprocess.run(["texliveonfly", "-c", compiler, main])
-        subprocess.run([compiler, "-shell-escape", main])
+        subprocess.run(['texliveonfly', '-c', compiler, main])
+        subprocess.run([compiler, '-shell-escape', main])
         log = main.replace('.tex', '.log')
         while 'Rerun to' in Path(log).read_text():
-            subprocess.run([compiler, "-shell-escape", main])
+            subprocess.run([compiler, '-shell-escape', main])
         pdf = main.replace('.tex', '.pdf')
 
     if platform.system() == 'Darwin':
-        subprocess.run(["open", pdf])
+        subprocess.run(['open', pdf])
     if platform.system() == 'Windows':
         subprocess.run([pdf])
     if platform.system() == 'Linux':
-        subprocess.run(["open", pdf])
+        subprocess.run(['open', pdf])
 
 if __name__ == '__main__':
     main()
