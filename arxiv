@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import platform
 from scriptine import run, path
 from scriptine.shell import call
 import tarfile
@@ -36,7 +37,10 @@ def view_command(tag):
         for f in path.cwd().files('*.tex'):
             if 'documentclass' in path(f).text():
                 pdf = f.replace('.tex', '.pdf')
-                call(['open', pdf])
+                if platform.system() == 'Darwin':
+                    call(['open', pdf])
+                if platform.system() == 'Windows':
+                    call(['sumatrapdf', pdf])
 
 def batch_command(tag):
     download_command(tag)
