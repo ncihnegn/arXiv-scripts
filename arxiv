@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
+"""Download arXiv source and build pdf"""
 
 import argparse
 import glob
-import gzip
 import os
 import platform
 import re
@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 def filetype(file):
+    "File type detection for specific types"
     header = Path(file).read_bytes()[0:4]
     if header == b'%PDF':
         return 'pdf'
@@ -23,117 +24,162 @@ def filetype(file):
         return 'gz'
     raise Exception('Unknown file type', file)
 
-def main():
-    parser = argparse.ArgumentParser(description='Download and build arXiv papers.')
-    parser.add_argument('tag', help='Paper tag')
-    parser.add_argument('--compiler', default='pdflatex', help='Use pdflatex or xelatex')
-    parser.add_argument('--forcedownload', default=False, help='Force download')
-    parser.add_argument('--skipextract', default=False, help='Skip extraction')
+def dvi2pdf(dvi):
+    "Convert DVI to PDF"
+    subprocess.run(['dvips', dvi])
+    ps = dvi.replace('.dvi', '.ps')
+    subprocess.run(['ps2pdf', ps])
+    #subprocess.run(['dvipdfmx', dvi])
+    return dvi.replace('.dvi', '.pdf')
 
-    args = parser.parse_args()
-    tag = args.tag
-    compiler = args.compiler
-    skipextract = args.skipextract
-    forcedownload = args.forcedownload
-
-    if compiler.endswith('latex'):
-        source = 'latex'
+def extract(archive):
+    "Extract"
+    if tarfile.is_tarfile(archive):
+        os.rename(archive, archive + '.tar.gz')
+        archive += '.tar.gz'
+        tar = tarfile.open(archive)
+        tar.extractall()
+        tar.close()
     else:
-        source = 'tex'
+        os.rename(archive, archive + '.gz')
+        archive += '.gz'
+        subprocess.run(['gzip', '-dNf', archive])
 
-    os.makedirs(tag, exist_ok=True)
-    os.chdir(tag)
-    # Download sources
-    url = 'https://arxiv.org/e-print/' + tag
-    archive = tag.split('/')[0]
+def tex2pdf(tex, compiler):
+    "Build PDF"
+    subprocess.run(['texliveonfly', '-c', compiler, tex])
+    command = [compiler, '-halt-on-error', '-shell-escape']
+    subprocess.run(command + [tex])
+    log = Path(tex.replace('.tex', '.log'))
+    text = log.read_text(errors='ignore')
+    if 'Package inputenc Error: Invalid UTF-8 byte sequence' in text:
+        command.append('\\UseRawInputEncoding \\input')
+    if 'Non-PDF special' in text or 'extension: .pstex' in text or 'PSTricks' in text:
+        compiler = compiler.replace('pdf', '')
+        compiler = compiler.replace('xe', '')
+        command[0] = compiler
+    subprocess.run(command + [tex])
+    while 'Rerun to' in log.read_text(errors='ignore'):
+        subprocess.run(command + [tex])
+    missfont = Path('missfont.log')
+    if missfont.exists():
+        print('Missing fonts!')
+    if not (compiler.startswith('pdf') or compiler.startswith('xe')):
+        dvi = tex.replace('.tex', '.dvi')
+        return dvi2pdf(dvi)
+    return tex.replace('.tex', '.pdf')
 
-    if not os.path.exists(archive) or forcedownload:
-        try:
-            urllib.request.urlretrieve(url, archive)
-        except urllib.error.HTTPError as e:
-            print(e, url)
-            if e.code == 403:
-                print('Try DVI')
-                try:
-                    url = 'https://arxiv.org/dvi/' + tag
-                    urllib.request.urlretrieve(url, archive)
-                    source = 'dvi'
-                except urllib.error.URLError as e:
-                    print(e, url)
-                    exit(-1)
-        except urllib.error.URLError as e:
-            print(e, url)
-            exit(-1)
-
-    pdf = archive + '.pdf'
-    file_type = filetype(archive)
-    if file_type == 'pdf':
-        os.rename(archive, pdf)
-        source = 'pdf'
-    if file_type == 'ps':
-        ps = archive + '.ps'
-        os.rename(archive, ps)
-        subprocess.run(['ps2pdf', ps])
-        source = 'ps'
-
-    # Extract
-    if not skipextract and (source.endswith('tex') or source.endswith('dvi')):
-        if file_type == 'gz':
-            if tarfile.is_tarfile(archive):
-                os.rename(archive, archive + '.tar.gz')
-                archive += '.tar.gz'
-                tar = tarfile.open(archive)
-                tar.extractall()
-                tar.close()
-            else:
-                os.rename(archive, archive + '.gz')
-                archive += '.gz'
-                subprocess.run(['gzip', '-dNf', archive])
-
-    if source == 'dvi':
-        results = glob.glob('*.dvi')
-        dvi = results[0]
-        pdf = dvi.replace('dvi', 'pdf')
-        subprocess.run(['dvipdfmx', dvi])
-
-    if source.endswith('tex'):
-        results = []
-        if source == 'latex':
-            # Find the main file
-            for file in glob.glob('*.tex'):
-                if re.search('^\\s*\\\\documentclass', Path(file).read_text(errors='ignore'), re.MULTILINE):
-                    results.append(file)
-            if results == []:
-                print("Can't find the main LaTeX file, switch to plain TeX")
-                source = 'tex'
-                compiler = 'pdftex'
-        if source == 'tex':
-            results = glob.glob('*.tex')
-
-        if results == []:
-            raise Exception("Can't find the main TeX file", glob.glob('*.tex'))
-
-        main = results[0]
-
-        # Build
-        subprocess.run(['texliveonfly', '-c', compiler, main])
-        command = [compiler, '-halt-on-error', '-shell-escape']
-        subprocess.run(command + [main])
-        log = Path(main.replace('.tex', '.log'))
-        if 'Package inputenc Error: Invalid UTF-8 byte sequence' in log.read_text(errors='ignore'):
-            command.append('\\UseRawInputEncoding \\input')
-            print(command)
-            subprocess.run(command + [main])
-        while 'Rerun to' in log.read_text(errors='ignore'):
-            subprocess.run(command + [main])
-        pdf = main.replace('.tex', '.pdf')
-
+def view_pdf(pdf):
+    "View PDF"
     if platform.system() == 'Darwin':
         subprocess.run(['open', pdf])
     if platform.system() == 'Windows':
         subprocess.run([pdf])
     if platform.system() == 'Linux':
         subprocess.run(['open', pdf])
+
+def parse_args():
+    "Parse arguments"
+    parser = argparse.ArgumentParser(description='Download and build arXiv papers.')
+    parser.add_argument('tag', help='Paper tag')
+    parser.add_argument('--compiler', default='pdflatex', help='Use pdflatex or xelatex')
+    parser.add_argument('--forcedownload', default=False, help='Force download')
+    parser.add_argument('--skipextract', default=False, help='Skip extraction')
+
+    return parser.parse_args()
+
+def download(tag, archive):
+    "Download source"
+    url = 'https://arxiv.org/e-print/' + tag
+    try:
+        urllib.request.urlretrieve(url, archive)
+        return 'latex'
+    except urllib.error.HTTPError as e:
+        print(e, url)
+        if e.code == 403:
+            print('Try downloading DVI')
+            try:
+                url = 'https://arxiv.org/dvi/' + tag
+                urllib.request.urlretrieve(url, archive)
+                return 'dvi'
+            except urllib.error.URLError as e:
+                print(e, url)
+                exit(-1)
+    except urllib.error.URLError as e:
+        print(e, url)
+        exit(-1)
+
+def find_main_latex():
+    "Find the main LaTeX file"
+    results = []
+    for file in glob.glob('*.tex'):
+        text = Path(file).read_text(errors='ignore')
+        if re.search('^\\s*\\\\documentclass', text, re.MULTILINE):
+            results.append(file)
+    return results
+
+def main():
+    "Main script"
+    args = parse_args()
+    tag = args.tag
+    compiler = args.compiler
+    skipextract = args.skipextract
+    forcedownload = args.forcedownload
+
+    source = 'latex'
+    if not compiler.endswith('latex'):
+        source = 'tex'
+
+    os.makedirs(tag, exist_ok=True)
+    os.chdir(tag)
+
+    archive = tag.split('/')[-1]
+
+    # Download sources
+    if not os.path.exists(archive) or forcedownload:
+        if download(tag, archive) == 'dvi':
+            source = 'dvi'
+
+    pdf = archive + '.pdf'
+    file_type = filetype(archive)
+    if file_type == 'pdf':
+        os.rename(archive, pdf)
+        source = 'pdf'
+
+    # Extract
+    if not skipextract and (source.endswith('tex') or source.endswith('dvi')):
+        if file_type == 'gz':
+            extract(archive)
+
+    if source == 'dvi':
+        results = glob.glob('*.dvi')
+        if results == []:
+            raise Exception("Can't find a DVI file in", glob.glob('*'))
+        dvi = results[0]
+        pdf = dvi2pdf(dvi)
+
+    if source.endswith('tex'):
+        if source == 'latex':
+            # Find the main file
+            results = find_main_latex()
+            if results == []:
+                print("Can't find the main LaTeX file in", glob.glob('*.tex'))
+                print('Switch to plain TeX')
+                source = 'tex'
+                compiler = 'pdftex'
+        if source == 'tex':
+            results = glob.glob('*.tex')
+
+        if results == []:
+            raise Exception("Can't find a TeX file in", glob.glob('*'))
+
+        main_tex = results[0]
+
+        # Build
+        pdf = tex2pdf(main_tex, compiler)
+
+    view_pdf(pdf)
+
 
 if __name__ == '__main__':
     main()
