@@ -5,14 +5,15 @@ from scriptine.shell import call
 import tarfile
 
 def download_command(tag):
+    dir = path(tag)
+    dir.ensure_dir()
     url = 'http://arxiv.org/e-print/' + tag
     file = tag + '.tar.gz'
     call(['curl', '-o', file, url])
 
 def extract_command(tag):
     dir = path(tag)
-    if not dir.exists():
-        dir.makedirs()
+    dir.ensure_dir()
     gz = tag + '.tar.gz'
     call(['gunzip', '-f', gz])
     tar = tag + '.tar'
