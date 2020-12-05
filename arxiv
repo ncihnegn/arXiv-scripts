@@ -80,12 +80,14 @@ def tex2pdf(tex, compiler, verbose):
         command[0] = compiler
     if verbose:
         print(command + [tex])
+    missfont = Path('missfont.log')
+    if missfont.exists():
+        missfont.unlink() # 3.8 only: missing_ok=True)
     subprocess.run(command + [tex], capture_output=not verbose)
     while 'Rerun to' in log.read_text(errors='ignore'):
         if verbose:
             print('Rerun', command)
         subprocess.run(command + [tex], capture_output=not verbose)
-    missfont = Path('missfont.log')
     if missfont.exists():
         print('Missing fonts!')
         subprocess.run(['cat', 'missfont.log'])
@@ -188,7 +190,7 @@ def main():
     skipextract = args.skipextract
     forcedownload = args.forcedownload
     verbose = args.verbose
-    print("arxiv:", tag, compiler, "skipextract:", skipextract,
+    print("arxiv:", tag, "compiler:", compiler, "skipextract:", skipextract,
           "forcedownload:", forcedownload, "verbose:", verbose)
 
     source = 'latex'
