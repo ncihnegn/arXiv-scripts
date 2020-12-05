@@ -52,6 +52,17 @@ def main():
     if not os.path.exists(archive) or forcedownload:
         try:
             urllib.request.urlretrieve(url, archive)
+        except urllib.error.HTTPError as e:
+            print(e, url)
+            if e.code == 403:
+                print('Try DVI')
+                try:
+                    url = 'https://arxiv.org/dvi/' + tag
+                    urllib.request.urlretrieve(url, archive)
+                    source = 'dvi'
+                except urllib.error.URLError as e:
+                    print(e, url)
+                    exit(-1)
         except urllib.error.URLError as e:
             print(e, url)
             exit(-1)
@@ -68,15 +79,26 @@ def main():
         source = 'ps'
 
     # Extract
-    if not skipextract and source.endswith('tex'):
+    if not skipextract and (source.endswith('tex') or source.endswith('dvi')):
         if file_type == 'gz':
             if tarfile.is_tarfile(archive):
+                os.rename(archive, archive + '.tar.gz')
+                archive += '.tar.gz'
                 tar = tarfile.open(archive)
                 tar.extractall()
                 tar.close()
             else:
-                subprocess.run(['gunzip', '-N', archive])
+                os.rename(archive, archive + '.gz')
+                archive += '.gz'
+                subprocess.run(['gzip', '-dNf', archive])
 
+    if source == 'dvi':
+        results = glob.glob('*.dvi')
+        dvi = results[0]
+        pdf = dvi.replace('dvi', 'pdf')
+        subprocess.run(['dvipdfmx', dvi])
+
+    if source.endswith('tex'):
         results = []
         if source == 'latex':
             # Find the main file
@@ -84,6 +106,7 @@ def main():
                 if re.search('^\\s*\\\\documentclass', Path(file).read_text(errors='ignore'), re.MULTILINE):
                     results.append(file)
             if results == []:
+                print("Can't find the main LaTeX file, switch to plain TeX")
                 source = 'tex'
                 compiler = 'pdftex'
         if source == 'tex':
@@ -96,10 +119,15 @@ def main():
 
         # Build
         subprocess.run(['texliveonfly', '-c', compiler, main])
-        subprocess.run([compiler, '-shell-escape', main])
-        log = main.replace('.tex', '.log')
-        while 'Rerun to' in Path(log).read_text():
-            subprocess.run([compiler, '-shell-escape', main])
+        command = [compiler, '-halt-on-error', '-shell-escape']
+        subprocess.run(command + [main])
+        log = Path(main.replace('.tex', '.log'))
+        if 'Package inputenc Error: Invalid UTF-8 byte sequence' in log.read_text(errors='ignore'):
+            command.append('\\UseRawInputEncoding \\input')
+            print(command)
+            subprocess.run(command + [main])
+        while 'Rerun to' in log.read_text(errors='ignore'):
+            subprocess.run(command + [main])
         pdf = main.replace('.tex', '.pdf')
 
     if platform.system() == 'Darwin':
