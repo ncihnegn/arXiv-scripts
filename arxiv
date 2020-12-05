@@ -30,7 +30,7 @@ def compile_command(tag):
                 call(['texliveonfly', f])
                 call(['pdflatex', '-shell-escape', f])
                 log = f.replace('.tex', '.log')
-                while 'Rerun to get cross-references' in path(log).text():
+                while 'Rerun to' in path(log).text():
                     call(['pdflatex', '-shell-escape', f])
 
 def view_command(tag):
