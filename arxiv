@@ -4,20 +4,19 @@ import argparse
 import glob
 import gzip
 import os
-from pathlib import Path
 import platform
 import re
 import subprocess
 import tarfile
 import urllib.error
 import urllib.request
+from pathlib import Path
+
 
 def filetype(file):
     header = Path(file).read_bytes()[0:4]
     if header == b'%PDF':
         return 'pdf'
-    if header[0:-1] == b'%PS':
-        return 'ps'
     if header[0:-1] == b'%PS':
         return 'ps'
     if header[0:2] == b'\x1f\x8b':
