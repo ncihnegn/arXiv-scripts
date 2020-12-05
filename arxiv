@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 import platform
+import re
 import tarfile
 from scriptine import run, path
 from scriptine.shell import call
@@ -25,11 +26,11 @@ def compile_command(tag):
     dir = path(tag)
     with dir.as_working_dir():
         for f in path.cwd().files('*.tex'):
-            if 'documentclass' in path(f).text():
+            if re.search('^\\\\documentclass', path(f).text(), re.MULTILINE):
                 call(['texliveonfly', f])
                 call(['pdflatex', '-shell-escape', f])
                 log = f.replace('.tex', '.log')
-                while 'Rerun' in path(log).text():
+                while 'Rerun to get cross-references' in path(log).text():
                     call(['pdflatex', '-shell-escape', f])
 
 def view_command(tag):
