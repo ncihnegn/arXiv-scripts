@@ -1,126 +1,96 @@
-#!/usr/bin/env python
-"""script to download from arXiv and build PDF"""
+#!/usr/bin/env python3
 
+import argparse
+import filetype
+import glob
+import gzip
 import os
+from pathlib import Path
 import platform
 import re
+import subprocess
 import tarfile
-from random import choice
-from subprocess import Popen
+import urllib.error
+import urllib.request
 
-import filetype
+def main():
+    parser = argparse.ArgumentParser(description='Download and build arXiv papers.')
+    parser.add_argument('tag', help='Paper tag')
+    parser.add_argument('--compiler', default='pdflatex', help='Use pdflatex or xelatex')
+    parser.add_argument('--forcedownload', default=False, help='Force download')
+    parser.add_argument('--skipextract', default=False, help='Skip extraction')
 
-from scriptine import path, run
-from scriptine.shell import call
+    args = parser.parse_args()
+    tag = args.tag
+    compiler = args.compiler
+    skipextract = args.skipextract
+    forcedownload = args.forcedownload
 
-file = ""
+    if compiler.endswith('latex'):
+        source = "latex"
+    else:
+        source = "plain"
 
-
-def download_command(tag):
-    """Download"""
+    os.makedirs(tag, exist_ok=True)
+    os.chdir(tag)
+    # Download sources
     url = 'https://arxiv.org/e-print/' + tag
-    file = tag + '.tar.gz'
-    call(['curl', '-o', file, url])
+    archive = tag.split('/')[0]
 
+    if not os.path.exists(archive) or forcedownload:
+        try:
+            urllib.request.urlretrieve(url, archive)
+        except urllib.error.URLError as e:
+            print(e, url)
+            exit(-1)
 
-def extract_command(tag):
-    """Extract"""
-    gzip = tag + '.tar.gz'
-    kind = filetype.guess(gzip)
-    if kind.extension == 'pdf':
-        os.rename(gzip, tag + '.' + kind.extension)
-        return
-    if path(gzip).isfile():
-        call(['gzip', '-df', gzip])
-    directory = path(tag)
-    directory.ensure_dir()
-    tar = tag + '.tar'
-    if tarfile.is_tarfile(tar):
-        call(['tar', 'xf', tar, '-C', tag])
-    elif path(tar).isfile():
-        os.rename(tar, tag + '/' + directory.basename() + '.tex')
+    # Extract
+    pdf = archive + '.pdf'
+    if not skipextract:
+        file_type = filetype.guess(archive)
+        if file_type.extension == 'pdf':
+            os.rename(archive, pdf)
+            source = 'pdf'
+        if file_type.extension == 'ps':
+            ps = archive + '.ps'
+            os.rename(archive, ps)
+            subprocess.run(['ps2pdf', ps])
+            source = 'ps'
+        if file_type.extension == 'gz':
+            if tarfile.is_tarfile(archive):
+                tar = tarfile.open(archive)
+                tar.extractall()
+                tar.close()
+            else:
+                subprocess.run(['gunzip', '-N', archive])
 
+        results = []
+        if source == "latex":
+            # Find the main file
+            for file in glob.glob("*.tex"):
+                if re.search('^\\s*\\\\documentclass', Path(file).read_text(errors='ignore'), re.MULTILINE):
+                    results.append(file)
+            if results == []:
+                raise Exception("Can't find the main TeX file", glob.glob("*.tex"))
+        else:
+            results = glob.glob("*.tex")
 
-def find_main(tag):
-    """Find the main tex file"""
-    results = []
-    directory = path(tag)
-    with directory.as_working_dir():
-        for texfile in path.cwd().files('*.tex'):
-            if re.search('^\\s*\\\\documentclass', path(texfile).text(),
-                         re.MULTILINE):
-                results.append(texfile)
-    if results == []:
-        raise Exception("Can't find the main tex file in " + tag)
-    return choice(results)
+        main = results[0]
 
+        # Build
+        subprocess.run(["texliveonfly", "-c", compiler, main])
+        subprocess.run([compiler, "-shell-escape", main])
+        log = main.replace('.tex', '.log')
+        while 'Rerun to' in Path(log).read_text():
+            subprocess.run([compiler, "-shell-escape", main])
+        pdf = main.replace('.tex', '.pdf')
 
-def compile_command(tag):
-    """Run LaTeX"""
-    global file
-
-    directory = path(tag)
-    missfont = 'missfont.log'
-
-    if file == "":
-        file = find_main(tag)
-    with directory.as_working_dir():
-        call(['texliveonfly', file])
-        if path(missfont).isfile():
-            os.remove(missfont)
-        call(['pdflatex', '-shell-escape', file])
-        log = file.replace('.tex', '.log')
-        while 'Rerun to' in path(log).text():
-            call(['pdflatex', '-shell-escape', file])
-        if path(missfont).isfile():
-            with open(missfont, 'r') as fin:
-                print(fin.read())
-
-
-def view_command(tag):
-    """Open the main PDF file"""
-    global file
-    directory = path(tag)
-    pdf = tag + '.pdf'
-    if not path(pdf).isfile():
-        if file == "":
-            file = find_main(tag)
-        with directory.as_working_dir():
-            pdf = file.replace('.tex', '.pdf')
-    view(pdf)
-
-
-def view(pdf):
-    """Open PDF file"""
     if platform.system() == 'Darwin':
-        call(['open', pdf])
+        subprocess.run(["open", pdf])
     if platform.system() == 'Windows':
-        Popen(['sumatrapdf', pdf])
+        subprocess.run([pdf])
     if platform.system() == 'Linux':
-        Popen(['zathura', pdf])
-
-
-def batch_command(tag):
-    """Batch"""
-    global file
-    if not path(tag + '.pdf').isfile():
-        download_command(tag)
-        # if not path(tag).isdir():
-        extract_command(tag)
-        if not path(tag + '.pdf').isfile():
-            file = find_main(tag)
-            compile_command(tag)
-    view_command(tag)
-
-
-def all_command():
-    """Compile all subdirectories"""
-    global file
-    for folder in os.listdir('.'):
-        if path(folder).isdir() and folder[0].isdigit():
-            file = find_main(folder)
-            compile_command(folder)
-
+        subprocess.run(["open", pdf])
 
 if __name__ == '__main__':
-    run()
+    main()
