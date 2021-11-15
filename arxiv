@@ -82,7 +82,7 @@ def tex2pdf(tex, compiler, verbose):
         print(command + [tex])
     missfont = Path('missfont.log')
     if missfont.exists():
-        missfont.unlink() # 3.8 only: missing_ok=True)
+        missfont.unlink()  # 3.8 only: missing_ok=True)
     subprocess.run(command + [tex], capture_output=not verbose)
     while 'Rerun to' in log.read_text(errors='ignore'):
         if verbose:
@@ -177,9 +177,9 @@ def find_main_latex():
     results = []
     for file in glob.glob('*.tex'):
         text = Path(file).read_text(errors='ignore')
-        if re.search('^\\s*\\\\documentclass', text, re.MULTILINE):
-            results.append(file)
-        if re.search('^\\s*\\\\documentstyle', text, re.MULTILINE):
+        if (re.search('^\\s*\\\\documentclass', text, re.MULTILINE)
+                or re.search('^\\s*\\\\documentstyle', text, re.MULTILINE)
+            ) and (not re.search("document.*subfiles", text)):
             results.append(file)
     return results
 
