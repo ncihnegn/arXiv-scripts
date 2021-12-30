@@ -143,35 +143,46 @@ def download(tag, archive):
         r = requests.get(url)
         with open(archive, 'wb') as f:
             f.write(r.content)
+            try:
+                file_type = filetype(archive)
+            except Exception as e:
+                print(e, url)
+                return download_alternative_format(tag, archive)
         return 'latex'
     except urllib.error.HTTPError as e:
         print(e, url)
         if e.code == 403:
-            print('Try other formats')
-            try:
-                r = requests.get('https://arxiv.org/format/' + tag)
-                html = etree.HTML(bytes(bytearray(r.text, encoding='utf-8')))
-                forms = html.xpath('body/div/dl/dd/form')
-                paths = list(map(lambda f: f.get('action'), forms))
-                formats = dict()
-                for path in paths:
-                    fmt = path.split('/')[1]
-                    formats[fmt] = path
-                if 'dvi' in formats:
-                    urllib.request.urlretrieve(
-                        'https://arxiv.org' + formats['dvi'], archive)
-                    return 'dvi'
-                if 'ps' in formats:
-                    urllib.request.urlretrieve(
-                        'https://arxiv.org' + formats['ps'], archive)
-                    return 'ps'
-                if 'pdf' in formats:
-                    urllib.request.urlretrieve(
-                        'https://arxiv.org' + formats['pdf'], archive)
-                    return 'pdf'
-            except urllib.error.URLError as e:
-                print(e, url)
-                exit(-1)
+            if verbose:
+                print('Try other formats')
+            return download_alternative_format(tag, archive)
+    except urllib.error.URLError as e:
+        print(e, url)
+        exit(-1)
+
+
+def download_alternative_format(tag, archive):
+    "Download alternative format"
+    try:
+        r = requests.get('https://arxiv.org/format/' + tag)
+        html = etree.HTML(bytes(bytearray(r.text, encoding='utf-8')))
+        forms = html.xpath('body/div/dl/dd/form')
+        paths = list(map(lambda f: f.get('action'), forms))
+        formats = dict()
+        for path in paths:
+            fmt = path.split('/')[1]
+            formats[fmt] = path
+        if 'dvi' in formats:
+            urllib.request.urlretrieve('https://arxiv.org' + formats['dvi'],
+                                       archive)
+            return 'dvi'
+        if 'ps' in formats:
+            urllib.request.urlretrieve('https://arxiv.org' + formats['ps'],
+                                       archive)
+            return 'ps'
+        if 'pdf' in formats:
+            urllib.request.urlretrieve('https://arxiv.org' + formats['pdf'],
+                                       archive)
+            return 'pdf'
     except urllib.error.URLError as e:
         print(e, url)
         exit(-1)
