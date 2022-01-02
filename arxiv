@@ -78,7 +78,7 @@ def tex2pdf(tex, compiler, verbose):
         compiler = compiler.replace('pdf', '')
         compiler = compiler.replace('xe', '')
         command[0] = compiler
-    if 'LaTeX Error: Unicode character' in text:
+    if '! LaTeX Error: ' in text:
         if verbose:
             print('Switch to XeLaTeX')
         compiler = 'xelatex'
