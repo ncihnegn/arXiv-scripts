@@ -254,15 +254,20 @@ def main():
             # Find the main file
             results = find_main_latex()
             if results == []:
-                print("Can't find the main LaTeX file in", glob.glob('*.*t*x'))
-                print('Switch to plain TeX')
+                if verbose:
+                    print("Can't find the main LaTeX file in", glob.glob('*.*t*x'))
+                    print('Switch to plain TeX')
                 source = 'tex'
                 compiler = 'pdftex'
         if source == 'tex':
             results = glob.glob('*.tex')
 
         if results == []:
-            raise Exception("Can't find a TeX file in", glob.glob('*'))
+            results = glob.glob('*')
+            if results == ['withdrawn']:
+                print("Paper withdrawn")
+                return
+            raise Exception("Can't find a TeX file in", results)
 
         main_tex = results[0]
 
