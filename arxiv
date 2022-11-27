@@ -207,9 +207,11 @@ def main():
     skipextract = args.skipextract
     forcedownload = args.forcedownload
     verbose = args.verbose
-    print("arxiv:", tag, ",", "compiler:", compiler, ",", "skipextract:",
-          skipextract, ",", "forcedownload:", forcedownload, ",", "verbose:",
-          verbose)
+    print("arxiv:", tag)
+    print("compiler:", compiler)
+    print("skipextract:", skipextract)
+    print("forcedownload:", forcedownload)
+    print("verbose:", verbose)
 
     source = 'latex'
     if not compiler.endswith('latex'):
@@ -255,7 +257,8 @@ def main():
             results = find_main_latex()
             if results == []:
                 if verbose:
-                    print("Can't find the main LaTeX file in", glob.glob('*.*t*x'))
+                    print("Can't find the main LaTeX file in",
+                          glob.glob('*.*t*x'))
                     print('Switch to plain TeX')
                 source = 'tex'
                 compiler = 'pdftex'
