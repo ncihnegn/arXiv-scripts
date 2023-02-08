@@ -24,7 +24,7 @@ def filetype(file):
         return 'ps'
     if header[0:2] == b'\x1f\x8b':
         return 'gz'
-    raise Exception('Unknown file type', file)
+    raise NotImplementedError('Unknown file type', file)
 
 
 def dvi2pdf(dvi, verbose):
@@ -32,11 +32,10 @@ def dvi2pdf(dvi, verbose):
     command = ['dvips', dvi]
     if verbose:
         print(command)
-    subprocess.run(command, capture_output=not verbose)
+    subprocess.run(command, capture_output=not verbose, check=False)
     ps = Path(dvi).with_suffix('.ps')
     print('ps2pdf')
-    subprocess.run(['ps2pdf', ps], capture_output=not verbose)
-    #subprocess.run(['dvipdfmx', dvi])
+    subprocess.run(['ps2pdf', ps], capture_output=not verbose, check=False)
     return Path(dvi).with_suffix('.pdf')
 
 
@@ -45,17 +44,25 @@ def extract(archive):
     if tarfile.is_tarfile(archive):
         os.rename(archive, archive + '.tar.gz')
         archive += '.tar.gz'
-        tar = tarfile.open(archive)
-        tar.extractall()
-        tar.close()
+        with tarfile.open(archive) as tar:
+            tar.extractall()
     else:
         os.rename(archive, archive + '.gz')
         archive += '.gz'
-        subprocess.run(['gzip', '-dNf', archive])
+        subprocess.run(['gzip', '-dNf', archive], check=False)
 
 
 def tex2pdf(tex, compiler, verbose):
     "Build PDF"
+    try:
+        subprocess.run(['tectonic'] + [tex],
+                       capture_output=not verbose,
+                       check=True)
+        return Path(tex).with_suffix('.pdf')
+    except FileNotFoundError as err:
+        print(err)
+    except subprocess.CalledProcessError as err:
+        print(err)
     command = ['texliveonfly', '-c', compiler]
     if verbose:
         print(command + [tex])
@@ -63,11 +70,8 @@ def tex2pdf(tex, compiler, verbose):
     command = [
         compiler, '-interaction=batchmode', '-halt-on-error', '-shell-escape'
     ]
-    #if verbose:
-    #    print(command + [tex])
-    #subprocess.run(command + [tex], capture_output=not verbose)
     log = Path(tex).with_suffix('.log')
-    text = log.read_text(errors='ignore')
+    text = log.read_text(encoding='utf-8', errors='ignore')
     if 'Package inputenc Error:' in text or 'UseRawInputEncoding' in text:
         if verbose:
             print('inputenc error')
@@ -88,14 +92,16 @@ def tex2pdf(tex, compiler, verbose):
     missfont = Path('missfont.log')
     if missfont.exists():
         missfont.unlink()  # 3.8 only: missing_ok=True)
-    subprocess.run(command + [tex], capture_output=not verbose)
-    while 'Rerun to' in log.read_text(errors='ignore'):
+    subprocess.run(command + [tex], capture_output=not verbose, check=False)
+    while 'Rerun to' in log.read_text(encoding='utf-8', errors='ignore'):
         if verbose:
             print('Rerun', command)
-        subprocess.run(command + [tex], capture_output=not verbose)
+        subprocess.run(command + [tex],
+                       capture_output=not verbose,
+                       check=False)
     if missfont.exists():
         print('Missing fonts!')
-        subprocess.run(['cat', 'missfont.log'])
+        subprocess.run(['cat', 'missfont.log'], check=False)
     if not (compiler.startswith('pdf') or compiler.startswith('xe')):
         return dvi2pdf(Path(tex).with_suffix('.dvi'), verbose)
     return Path(tex).with_suffix('.pdf')
@@ -104,11 +110,11 @@ def tex2pdf(tex, compiler, verbose):
 def view_pdf(pdf):
     "View PDF"
     if platform.system() == 'Darwin':
-        subprocess.run(['open', pdf])
+        subprocess.run(['open', pdf], check=False)
     if platform.system() == 'Windows':
-        subprocess.run([pdf])
+        subprocess.run([pdf], check=False)
     if platform.system() == 'Linux':
-        subprocess.run(['open', pdf])
+        subprocess.run(['open', pdf], check=False)
 
 
 def parse_args():
@@ -139,34 +145,31 @@ def download(tag, archive):
     "Download source"
     url = 'https://arxiv.org/e-print/' + tag
     try:
-        r = requests.get(url)
-        with open(archive, 'wb') as f:
-            f.write(r.content)
+        req = requests.get(url, timeout=10)
+        with open(archive, 'wb') as file:
+            file.write(req.content)
             try:
-                file_type = filetype(archive)
-            except Exception as e:
-                print(e, url)
+                return filetype(archive)
+            except IOError as err:
+                print(err, url)
                 return download_alternative_format(tag, archive)
         return 'latex'
-    except urllib.error.HTTPError as e:
-        print(e, url)
-        if e.code == 403:
-            if verbose:
-                print('Try other formats')
-            return download_alternative_format(tag, archive)
-    except urllib.error.URLError as e:
-        print(e, url)
-        exit(-1)
+    except urllib.error.HTTPError as err:
+        print(err, url)
+        return download_alternative_format(tag, archive)
+    except urllib.error.URLError as err:
+        print(err, url)
+        return download_alternative_format(tag, archive)
 
 
 def download_alternative_format(tag, archive):
     "Download alternative format"
     try:
-        r = requests.get('https://arxiv.org/format/' + tag)
-        html = etree.HTML(bytes(bytearray(r.text, encoding='utf-8')))
+        req = requests.get('https://arxiv.org/format/' + tag, timeout=10)
+        html = etree.HTML(bytes(bytearray(req.text, encoding='utf-8')))
         forms = html.xpath('body/div/dl/dd/form')
         paths = list(map(lambda f: f.get('action'), forms))
-        formats = dict()
+        formats = {}
         for path in paths:
             fmt = path.split('/')[1]
             formats[fmt] = path
@@ -182,19 +185,20 @@ def download_alternative_format(tag, archive):
             urllib.request.urlretrieve('https://arxiv.org' + formats['pdf'],
                                        archive)
             return 'pdf'
-    except urllib.error.URLError as e:
-        print(e, url)
-        exit(-1)
+        return 'error'
+    except urllib.error.URLError as err:
+        print(err)
+        return 'error'
 
 
 def find_main_latex():
     "Find the main LaTeX file"
     results = []
     for file in glob.glob('*.*t*x'):  # .tex or .ltx
-        text = Path(file).read_text(errors='ignore')
-        if (re.search('^\\s*\\\\documentclass', text, re.MULTILINE)
-                or re.search('^\\s*\\\\documentstyle', text, re.MULTILINE)
-            ) and (not re.search("document.*subfiles", text)):
+        text = Path(file).read_text(encoding='utf-8', errors='ignore')
+        if (not re.search("document.*subfiles", text)) and (
+                re.search('^\\s*\\\\documentclass', text, re.MULTILINE)
+                or re.search('^\\s*\\\\documentstyle', text, re.MULTILINE)):
             results.append(file)
     return results
 
@@ -216,8 +220,8 @@ def main():
     source = 'latex'
     if not compiler.endswith('latex'):
         source = 'tex'
-        #if verbose:
-        print("Source: TeX")
+        if verbose:
+            print("Source: TeX")
 
     os.makedirs(tag, exist_ok=True)
     os.chdir(tag)
@@ -246,8 +250,8 @@ def main():
 
     if source == 'dvi':
         results = glob.glob('*.dvi')
-        if results == []:
-            raise Exception("Can't find a DVI file in", glob.glob('*'))
+        if not results:
+            raise FileNotFoundError("Can't find a DVI file in", glob.glob('*'))
         dvi = results[0]
         pdf = dvi2pdf(dvi, verbose)
 
@@ -255,7 +259,7 @@ def main():
         if source == 'latex':
             # Find the main file
             results = find_main_latex()
-            if results == []:
+            if not results:
                 if verbose:
                     print("Can't find the main LaTeX file in",
                           glob.glob('*.*t*x'))
@@ -265,12 +269,12 @@ def main():
         if source == 'tex':
             results = glob.glob('*.tex')
 
-        if results == []:
+        if not results:
             results = glob.glob('*')
             if results == ['withdrawn']:
                 print("Paper withdrawn")
                 return
-            raise Exception("Can't find a TeX file in", results)
+            raise FileNotFoundError("Can't find a TeX file in", results)
 
         main_tex = results[0]
 
