@@ -24,8 +24,9 @@ def filetype(file):
         return 'ps'
     if header[0:2] == b'\x1f\x8b':
         return 'gz'
-    raise NotImplementedError('Unknown file type', file)
-
+    if Path(file).read_bytes()[257:262] == b'ustar':
+        return 'tar'
+    raise NotImplementedError('Unknown header', header)
 
 def dvi2pdf(dvi, verbose):
     "Convert DVI to PDF"
@@ -42,8 +43,8 @@ def dvi2pdf(dvi, verbose):
 def extract(archive):
     "Extract"
     if tarfile.is_tarfile(archive):
-        os.rename(archive, archive + '.tar.gz')
-        archive += '.tar.gz'
+        os.rename(archive, archive + '.tar')
+        archive += '.tar'
         with tarfile.open(archive) as tar:
             tar.extractall()
     else:
@@ -245,7 +246,7 @@ def main():
 
     # Extract
     if not skipextract and (source.endswith('tex') or source.endswith('dvi')):
-        if file_type == 'gz':
+        if file_type == 'gz' or file_type == 'tar':
             extract(archive)
 
     if source == 'dvi':
