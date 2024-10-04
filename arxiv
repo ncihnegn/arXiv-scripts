@@ -46,7 +46,7 @@ def extract(archive):
         os.rename(archive, archive + '.tar')
         archive += '.tar'
         with tarfile.open(archive) as tar:
-            tar.extractall()
+            tar.extractall(filter='data')
     else:
         os.rename(archive, archive + '.gz')
         archive += '.gz'
@@ -56,7 +56,7 @@ def extract(archive):
 def tex2pdf(tex, compiler, verbose):
     "Build PDF"
     try:
-        subprocess.run(['tectonic'] + [tex],
+        subprocess.run(['tectonic', tex],
                        capture_output=not verbose,
                        check=True)
         return Path(tex).with_suffix('.pdf')
