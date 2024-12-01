@@ -28,6 +28,7 @@ def filetype(file):
         return 'tar'
     raise NotImplementedError('Unknown header', header)
 
+
 def dvi2pdf(dvi, verbose):
     "Convert DVI to PDF"
     command = ['dvips', dvi]
