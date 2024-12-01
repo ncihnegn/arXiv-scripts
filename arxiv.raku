@@ -20,6 +20,8 @@ sub MAIN($tag) {
         my $tmpfilename = $filename.IO.extension: '';
         my $texfilename = $filename.IO.extension: 'tex';
         rename $tmpfilename, $texfilename;
+    } elsif $filename.ends-with: '.pdf' { # 2312.10426
+        run 'open', $filename;
     }
 
     for dir(test => /\.tex$/) -> $file {
