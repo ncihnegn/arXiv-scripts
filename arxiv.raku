@@ -40,10 +40,10 @@ sub MAIN($tag) {
                     my $texfilename = $filename.IO.extension: 'tex';
                     rename $filename, $texfilename;
                 }
-                default { say "Unknown extension: $_" }
+                default { say "Unknown 2nd extension: $_" }
             }
         }
-        default { say "Unknown extension: $_", }
+        default { say "Unknown 1st extension: $_", }
     }
 
     for dir(test => /\.tex$/) -> $file {
@@ -51,7 +51,8 @@ sub MAIN($tag) {
            my $proc = run 'texliveonfly', $file, :out, :err, :merge, :enc<utf8-c8>; # 2106.04826
            my @args = '-interaction=nonstopmode', $file;
            if $proc.out.comb('UnicodeDecodeError', 1) { # cs/0509027
-               @args = '-interaction=nonstopmode', '\\UseRawInputEncoding', '\\input', $file;
+               @args = '-interaction=nonstopmode', '\\UseRawInputEncoding',
+                       '\\input', $file;
            }
            $proc = run 'pdflatex', @args, :out, :enc<utf8-c8>; # cs/0509027
            while $proc.out.comb('Rerun', 1) {
