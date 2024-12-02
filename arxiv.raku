@@ -7,7 +7,7 @@ sub MAIN($tag) {
     chdir $tag;
 
     # Source
-    my $response = HTTP::Tiny.new.get: 'https://arxiv.org/e-print/' ~$tag;
+    my $response = HTTP::Tiny.new.get: 'https://arxiv.org/src/' ~$tag;
     die "Failed to download source!\n" unless $response<success>;
 
     my $filename = ($response<headers><content-disposition> ~~ /\".*\"/) .Str;
@@ -46,7 +46,7 @@ sub MAIN($tag) {
         default { say "Unknown 1st extension: $_", }
     }
 
-    for dir(test => /\.tex$/) -> $file {
+    for dir(test => /\.tex$/) -> $file { # LaTeX
        if $file.comb('\\documentclass', 1, :enc<utf8-c8>) { # cs/0301032
            my $proc = run 'texliveonfly', $file, :out, :err, :merge, :enc<utf8-c8>; # 2106.04826
            my @args = '-interaction=nonstopmode', $file;
@@ -61,6 +61,13 @@ sub MAIN($tag) {
            run 'open', $file.IO.extension: 'pdf';
            exit;
        };
+    }
+    for dir(test => /\.tex$/) -> $file { # Plain TeX
+           my @args = '-interaction=nonstopmode', $file;
+           my $proc = run 'pdftex', @args, :out, :enc<utf8-c8>; # math/9201303
+           next if $proc.out.comb('Fatal', 1);
+           run 'open', $file.IO.extension: 'pdf';
+           exit;
     }
     say 'No TeX Found'; # TODO: cs/0003064
 }
