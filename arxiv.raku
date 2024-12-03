@@ -20,25 +20,27 @@ sub MAIN($tag) {
             exit;
         }
         when 'gz' {
-            run 'gunzip', '-f', $filename;
+            my $gzip = run 'gzip', '-Nl', $filename, :out;
+            my $tail = run 'tail', '-n1', :in($gzip.out), :out;
+            my $cut = run 'cut', '-w', '-f5', :in($tail.out), :out;
+            my $original = $cut.out.get;
+            run 'gunzip', '-Nf', $filename;
             unlink $filename;
-            $filename = $filename.IO.extension: '';
-            given $filename.IO.extension {
+            given $original.IO.extension {
                 when 'ps' { # cs/0003065
-                    run 'open', $filename;
+                    run 'open', $original;
                     exit;
                 }
                 when 'html' {
-                    run 'open', $filename;
+                    run 'open', $original;
                     exit;
                 }
                 when 'tar' {
-                    run 'tar', 'xf', $filename;
-                    unlink $filename;
+                    run 'tar', 'xf', $original;
+                    unlink $original;
                 }
-                when '' {
-                    my $texfilename = $filename.IO.extension: 'tex';
-                    rename $filename, $texfilename;
+                when 'tex' {
+                    succeed;
                 }
                 default { say "Unknown 2nd extension: $_" }
             }
@@ -69,5 +71,5 @@ sub MAIN($tag) {
            run 'open', $file.IO.extension: 'pdf';
            exit;
     }
-    say 'No TeX Found'; # TODO: cs/0003064
+    say 'No TeX Found'; # TODO: cs/0003064, cs/0408036
 }
