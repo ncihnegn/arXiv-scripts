@@ -21,23 +21,24 @@ sub MAIN($tag) {
         }
         when 'gz' {
             my $gzip = run 'gzip', '-Nl', $filename, :out;
-            my $tail = run 'tail', '-n1', :in($gzip.out), :out;
-            my $cut = run 'cut', '-w', '-f5', :in($tail.out), :out;
-            my $original = $cut.out.get;
+            # my $tail = run 'tail', '-n1', :in($gzip.out), :out;
+            # my $cut = run 'cut', '-w', '-f5', :in($tail.out), :out;
+            # my $original = $cut.out;
+            my $original = split(' ', $gzip.out.lines()[1], :skip-empty).[3];
             run 'gunzip', '-Nf', $filename;
-            unlink $filename;
             given $original.IO.extension {
                 when 'ps' { # cs/0003065
                     run 'open', $original;
                     exit;
                 }
-                when 'html' {
+                when 'html' { # cs/0001003
                     run 'open', $original;
                     exit;
                 }
                 when 'tar' {
                     run 'tar', 'xf', $original;
                     unlink $original;
+                    succeed;
                 }
                 when 'tex' {
                     succeed;
