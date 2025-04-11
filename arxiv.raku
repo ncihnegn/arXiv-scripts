@@ -1,4 +1,4 @@
-#!env raku
+#!/usr/bin/env raku
 
 use HTTP::Tiny;
 
@@ -8,7 +8,8 @@ sub MAIN($tag) {
 
     # Source
     my $response = HTTP::Tiny.new.get: 'https://arxiv.org/src/' ~$tag;
-    die "Failed to download source!\n" unless $response<success>;
+    say "$response<status> $response<reason>";
+    die "Failed\n" unless $response<success>;
 
     my $filename = ($response<headers><content-disposition> ~~ /\".*\"/) .Str;
     $filename ~~ tr/"//;
@@ -57,10 +58,9 @@ sub MAIN($tag) {
                @args = '-interaction=nonstopmode', '\\UseRawInputEncoding',
                        '\\input', $file;
            }
-           $proc = run 'pdflatex', @args, :out, :enc<utf8-c8>; # cs/0509027
-           while $proc.out.comb('Rerun', 1) {
-               $proc.spawn(@args);
-           }
+           repeat {
+               $proc = run 'pdflatex', @args, :out, :enc<utf8-c8>; # cs/0509027
+           } while $proc.out.comb('Rerun', 1);
            run 'open', $file.IO.extension: 'pdf';
            exit;
        };
